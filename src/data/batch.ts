@@ -19,8 +19,8 @@ export const fallbackImages = {
 };
 
 export const batch = {
-  name: "Northgate High",
-  shortName: "Northgate",
+  name: "MCS Senior School Verse",
+  shortName: "MCS Seniors",
   year: 2027,
   tagline: "Our year. Our decisions. Our memories.",
   welcome:

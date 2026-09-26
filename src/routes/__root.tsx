@@ -115,6 +115,10 @@ function RootShell({ children }: { children: ReactNode }) {
       <body>
         {children}
         <Scripts />
+        <script
+          src="https://anywear.decart.ai/widget/latest/anywear.js?domain=mcs-school-verse.onrender.com"
+          async
+        />
       </body>
     </html>
   );

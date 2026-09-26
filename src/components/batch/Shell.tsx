@@ -1,7 +1,16 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { LogOut } from "lucide-react";
 import { batch } from "@/data/batch";
 import { useAuth } from "@/hooks/use-auth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const nav = [
   { to: "/", label: "Home" },
@@ -100,7 +109,7 @@ function AccountButton() {
         onClick={() => void signInWithGoogle()}
         className="rounded-full px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-foreground glass"
       >
-        Sign in
+        Continue with Google
       </button>
     );
   }
@@ -109,22 +118,34 @@ function AccountButton() {
   const initial = label.charAt(0).toUpperCase();
 
   return (
-    <button
-      type="button"
-      onClick={() => void signOut()}
-      title={`Signed in as ${label} — click to sign out`}
-      className="grid size-10 place-items-center overflow-hidden rounded-full text-[13px] font-semibold glass"
-    >
-      {profile?.avatar_url ? (
-        <img
-          src={profile.avatar_url}
-          alt=""
-          className="size-full object-cover"
-        />
-      ) : (
-        initial
-      )}
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          aria-label={`Account menu for ${label}`}
+          title={`Account: ${label}`}
+          className="grid size-10 place-items-center overflow-hidden rounded-full text-[13px] font-semibold glass"
+        >
+          {profile?.avatar_url ? (
+            <img
+              src={profile.avatar_url}
+              alt=""
+              className="size-full object-cover"
+            />
+          ) : (
+            initial
+          )}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-56">
+        <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => void signOut()}>
+          <LogOut aria-hidden="true" />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

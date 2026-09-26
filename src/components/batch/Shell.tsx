@@ -22,6 +22,10 @@ const nav = [
 ] as const;
 
 export function Shell({ children }: { children: ReactNode }) {
+  const { user, profile } = useAuth();
+  const canManage =
+    !!user && (profile?.role === "admin" || profile?.role === "rep");
+
   return (
     <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
       <div className="pointer-events-none absolute -left-24 -top-24 h-[45%] w-[60%] rounded-full bg-ice/25 blur-3xl" />
@@ -54,6 +58,15 @@ export function Shell({ children }: { children: ReactNode }) {
                 {item.label}
               </Link>
             ))}
+            {canManage ? (
+              <Link
+                to="/manage"
+                className="rounded-full px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground"
+                activeProps={{ className: "text-accent glass" }}
+              >
+                Manage
+              </Link>
+            ) : null}
           </nav>
 
           <AccountButton />
@@ -89,6 +102,21 @@ export function Shell({ children }: { children: ReactNode }) {
               )}
             </Link>
           ))}
+          {canManage ? (
+            <Link
+              to="/manage"
+              className="flex flex-1 flex-col items-center gap-1 py-1"
+              activeProps={{
+                className:
+                  "flex flex-1 flex-col items-center gap-1 py-1 text-accent",
+              }}
+            >
+              <span className="font-mono text-[10px] uppercase tracking-[0.12em]">
+                Manage
+              </span>
+              <span className="size-1 rounded-full bg-transparent" />
+            </Link>
+          ) : null}
         </div>
       </nav>
     </div>

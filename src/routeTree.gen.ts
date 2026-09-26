@@ -14,6 +14,7 @@ import { Route as ClothesRouteImport } from './routes/clothes'
 import { Route as DecisionsRouteImport } from './routes/decisions'
 import { Route as EventsRouteImport } from './routes/events'
 import { Route as IdeasRouteImport } from './routes/ideas'
+import { Route as ManageRouteImport } from './routes/manage'
 import { Route as MemoriesRouteImport } from './routes/memories'
 
 const IndexRoute = IndexRouteImport.update({
@@ -41,6 +42,11 @@ const IdeasRoute = IdeasRouteImport.update({
   path: '/ideas',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ManageRoute = ManageRouteImport.update({
+  id: '/manage',
+  path: '/manage',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MemoriesRoute = MemoriesRouteImport.update({
   id: '/memories',
   path: '/memories',
@@ -53,6 +59,7 @@ export interface FileRoutesByFullPath {
   '/decisions': typeof DecisionsRoute
   '/events': typeof EventsRoute
   '/ideas': typeof IdeasRoute
+  '/manage': typeof ManageRoute
   '/memories': typeof MemoriesRoute
 }
 export interface FileRoutesByTo {
@@ -61,6 +68,7 @@ export interface FileRoutesByTo {
   '/decisions': typeof DecisionsRoute
   '/events': typeof EventsRoute
   '/ideas': typeof IdeasRoute
+  '/manage': typeof ManageRoute
   '/memories': typeof MemoriesRoute
 }
 export interface FileRoutesById {
@@ -70,14 +78,28 @@ export interface FileRoutesById {
   '/decisions': typeof DecisionsRoute
   '/events': typeof EventsRoute
   '/ideas': typeof IdeasRoute
+  '/manage': typeof ManageRoute
   '/memories': typeof MemoriesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/clothes' | '/decisions' | '/events' | '/ideas' | '/memories'
+    | '/'
+    | '/clothes'
+    | '/decisions'
+    | '/events'
+    | '/ideas'
+    | '/manage'
+    | '/memories'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/clothes' | '/decisions' | '/events' | '/ideas' | '/memories'
+  to:
+    | '/'
+    | '/clothes'
+    | '/decisions'
+    | '/events'
+    | '/ideas'
+    | '/manage'
+    | '/memories'
   id:
     | '__root__'
     | '/'
@@ -85,6 +107,7 @@ export interface FileRouteTypes {
     | '/decisions'
     | '/events'
     | '/ideas'
+    | '/manage'
     | '/memories'
   fileRoutesById: FileRoutesById
 }
@@ -94,6 +117,7 @@ export interface RootRouteChildren {
   DecisionsRoute: typeof DecisionsRoute
   EventsRoute: typeof EventsRoute
   IdeasRoute: typeof IdeasRoute
+  ManageRoute: typeof ManageRoute
   MemoriesRoute: typeof MemoriesRoute
 }
 
@@ -134,6 +158,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IdeasRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/manage': {
+      id: '/manage'
+      path: '/manage'
+      fullPath: '/manage'
+      preLoaderRoute: typeof ManageRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/memories': {
       id: '/memories'
       path: '/memories'
@@ -150,6 +181,7 @@ const rootRouteChildren: RootRouteChildren = {
   DecisionsRoute: DecisionsRoute,
   EventsRoute: EventsRoute,
   IdeasRoute: IdeasRoute,
+  ManageRoute: ManageRoute,
   MemoriesRoute: MemoriesRoute,
 }
 export const routeTree = rootRouteImport

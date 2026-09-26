@@ -36,6 +36,27 @@ Data and auth run on Supabase. Setup:
    and your production URL, under Authentication → URL Configuration →
    Redirect URLs (as `https://<your-site>/**`).
 
+## Content publishing
+
+After the database tables from your privately maintained schema are installed,
+run `supabase/migrations/202609260001_content_management.sql` in the Supabase
+SQL Editor. It secures profile roles and configures the `schoolverse-media`
+image bucket for admin/rep uploads.
+
+To grant the first class representative access, run this in the SQL Editor,
+replacing the email with their Google account:
+
+```sql
+update public.profiles
+set role = 'rep'
+where email = 'representative@example.com';
+```
+
+After signing in again, representatives see **Manage** in the app navigation.
+There they can publish events, clothing polls with design images, and memories.
+Google sign-in creates a profile on first sign-in; the same button works for
+both new and returning users.
+
 Data access lives in `src/hooks/use-batch-data.ts` (queries + mutations) and the
 session/profile state in `src/hooks/use-auth.tsx`.
 

@@ -1,0 +1,4 @@
+# Render Static Site — Single Page Application fallback.
+# Every path that is not a real file is served the SPA shell so the
+# client-side TanStack Router can resolve it.
+/*    /index.html   200

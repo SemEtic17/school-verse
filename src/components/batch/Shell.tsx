@@ -1,0 +1,153 @@
+import { Link } from "@tanstack/react-router";
+import type { ReactNode } from "react";
+import { batch } from "@/data/batch";
+import { useAuth } from "@/hooks/use-auth";
+
+const nav = [
+  { to: "/", label: "Home" },
+  { to: "/events", label: "Events" },
+  { to: "/decisions", label: "Decide" },
+  { to: "/clothes", label: "Clothes" },
+  { to: "/ideas", label: "Ideas" },
+  { to: "/memories", label: "Memories" },
+] as const;
+
+export function Shell({ children }: { children: ReactNode }) {
+  return (
+    <div className="relative min-h-screen overflow-hidden bg-background text-foreground">
+      <div className="pointer-events-none absolute -left-24 -top-24 h-[45%] w-[60%] rounded-full bg-ice/25 blur-3xl" />
+      <div className="pointer-events-none absolute -right-24 top-[38%] h-[40%] w-[55%] rounded-full bg-accent/20 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-0 left-[10%] h-[40%] w-[70%] rounded-full bg-glow/20 blur-3xl" />
+
+      <div className="relative mx-auto max-w-[430px] px-4 pb-32 pt-4 lg:max-w-5xl lg:px-8 lg:pb-16">
+        <header className="animate-rise flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="grid size-10 place-items-center rounded-2xl font-display text-[15px] glass">
+              {String(batch.year).slice(-2)}
+            </div>
+            <div>
+              <div className="eyebrow">{batch.shortName} · Class of</div>
+              <div className="font-display text-lg leading-none">
+                {batch.year}
+              </div>
+            </div>
+          </Link>
+
+          <nav className="hidden items-center gap-1 lg:flex">
+            {nav.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="rounded-full px-3 py-1.5 font-mono text-[11px] uppercase tracking-[0.12em] text-muted-foreground transition-colors hover:text-foreground"
+                activeOptions={{ exact: item.to === "/" }}
+                activeProps={{ className: "text-accent glass" }}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+
+          <AccountButton />
+        </header>
+
+        {children}
+      </div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-20 lg:hidden">
+        <div className="mx-auto m-3 flex max-w-[430px] items-center justify-between rounded-3xl px-2 py-2 glass-strong">
+          {nav.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className="flex flex-1 flex-col items-center gap-1 py-1"
+              activeOptions={{ exact: item.to === "/" }}
+            >
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={
+                      isActive
+                        ? "font-mono text-[10px] uppercase tracking-[0.12em] text-accent"
+                        : "font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
+                    }
+                  >
+                    {item.label}
+                  </span>
+                  <span
+                    className={`size-1 rounded-full ${isActive ? "bg-accent" : "bg-transparent"}`}
+                  />
+                </>
+              )}
+            </Link>
+          ))}
+        </div>
+      </nav>
+    </div>
+  );
+}
+
+function AccountButton() {
+  const { user, profile, loading, signInWithGoogle, signOut } = useAuth();
+
+  if (loading) {
+    return <div className="size-10 rounded-full glass" aria-hidden />;
+  }
+
+  if (!user) {
+    return (
+      <button
+        type="button"
+        onClick={() => void signInWithGoogle()}
+        className="rounded-full px-3 py-2 font-mono text-[10px] uppercase tracking-[0.12em] text-foreground glass"
+      >
+        Sign in
+      </button>
+    );
+  }
+
+  const label = profile?.full_name ?? user.email ?? "?";
+  const initial = label.charAt(0).toUpperCase();
+
+  return (
+    <button
+      type="button"
+      onClick={() => void signOut()}
+      title={`Signed in as ${label} — click to sign out`}
+      className="grid size-10 place-items-center overflow-hidden rounded-full text-[13px] font-semibold glass"
+    >
+      {profile?.avatar_url ? (
+        <img
+          src={profile.avatar_url}
+          alt=""
+          className="size-full object-cover"
+        />
+      ) : (
+        initial
+      )}
+    </button>
+  );
+}
+
+export function PageTitle({
+  eyebrow,
+  title,
+  blurb,
+}: {
+  eyebrow: string;
+  title: string;
+  blurb?: string;
+}) {
+  return (
+    <div className="animate-rise mt-6">
+      <div className="eyebrow">{eyebrow}</div>
+      <h1 className="mt-2 text-balance font-display text-[40px] leading-[0.92] lg:text-[56px]">
+        {title}
+      </h1>
+      {blurb ? (
+        <p className="mt-3 max-w-[48ch] text-pretty text-[13px] leading-relaxed text-muted-foreground">
+          {blurb}
+        </p>
+      ) : null}
+    </div>
+  );
+}

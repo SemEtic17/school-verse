@@ -25,9 +25,9 @@ npm run dev
 
 Data and auth run on Supabase. Setup:
 
-1. **Create the schema.** In the Supabase dashboard open the SQL editor and run
-   `supabase/schema.sql`. It creates every table, the `handle_new_user` trigger
-   that syncs Google sign-ups into `profiles`, RLS policies, and indexes.
+1. **Provision the database.** The SQL schema is intentionally excluded from
+   this repository. Apply your privately maintained schema in Supabase before
+   running the app.
 2. **Set env vars.** Copy `.env.example` to `.env.local` and fill in
    `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` (Project Settings → API).
    The anon key is browser-safe — Row Level Security enforces access.

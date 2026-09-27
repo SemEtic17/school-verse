@@ -55,6 +55,16 @@ export function buildChromeIntentUrl(target: string): string {
   );
 }
 
+/**
+ * The page we want the user to land on after leaving the in-app browser.
+ * Always the site root — deep links such as `/clothes` are client-rendered and
+ * 404 when a fresh browser opens them directly, so we send everyone to `/`.
+ */
+export function getBreakoutTarget(): string {
+  if (typeof window === "undefined") return "/";
+  return new URL("/", window.location.origin).href;
+}
+
 export type BreakoutResult =
   /** Nothing to do — we're already in a normal browser. */
   | "not-needed"

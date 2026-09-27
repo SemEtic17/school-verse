@@ -11,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { AuthProvider } from "@/hooks/use-auth";
+import { useInAppBrowser } from "@/hooks/use-in-app-browser";
+import { BrowserBreakoutBanner } from "@/components/batch/BrowserBreakoutBanner";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 
 function NotFoundComponent() {
@@ -126,10 +128,13 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const browser = useInAppBrowser();
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
+        {/* Social webviews black-screen WebGL, so prompt a hand-off everywhere. */}
+        <BrowserBreakoutBanner info={browser} />
         {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
         <Outlet />
       </AuthProvider>

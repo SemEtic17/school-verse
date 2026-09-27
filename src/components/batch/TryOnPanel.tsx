@@ -1,7 +1,5 @@
 import { useState } from "react";
 import type { ClothingItem } from "@/data/batch";
-import { useInAppBrowser } from "@/hooks/use-in-app-browser";
-import { BrowserBreakoutNotice } from "@/components/batch/BrowserBreakoutNotice";
 
 /**
  * Virtual try-on shell.
@@ -15,7 +13,6 @@ export function TryOnPanel({
   item: ClothingItem;
   onTryOn?: (args: { itemId: string; photo: File }) => Promise<string>;
 }) {
-  const browser = useInAppBrowser();
   const [photo, setPhoto] = useState<{ file: File; url: string } | null>(null);
   const [status, setStatus] = useState<"idle" | "running" | "done" | "unavailable">(
     "idle",
@@ -32,11 +29,6 @@ export function TryOnPanel({
     const url = await onTryOn({ itemId: item.id, photo: photo.file });
     setResult(url);
     setStatus("done");
-  }
-
-  // Social webviews black-screen WebGL, so route the user to a real browser.
-  if (browser.isInApp) {
-    return <BrowserBreakoutNotice info={browser} feature="the 3D try-on" />;
   }
 
   return (

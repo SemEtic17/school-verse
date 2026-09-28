@@ -107,6 +107,8 @@ export type Memory = {
   caption: string;
   event: string;
   date: string;
+  /** Raw ISO `event_date`, kept for editing. */
+  dateISO?: string | null | undefined;
   image: string;
   span?: boolean | undefined;
 };

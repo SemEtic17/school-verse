@@ -77,6 +77,7 @@ function toMemory(row: MemoryRow): Memory {
     id: row.id,
     caption: row.title,
     event: row.category,
+    dateISO: row.event_date,
     date: row.event_date
       ? new Date(row.event_date).toLocaleDateString(undefined, {
           month: "short",

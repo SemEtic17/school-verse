@@ -53,9 +53,18 @@ where email = 'representative@example.com';
 ```
 
 After signing in again, representatives see **Manage** in the app navigation.
-There they can publish events, clothing polls with design images, and memories.
-Google sign-in creates a profile on first sign-in; the same button works for
-both new and returning users.
+There they can publish and edit events, clothing polls with design images, and
+memories, moderate ideas, and (for full admins) manage people. Google sign-in
+creates a profile on first sign-in; the same button works for both new and
+returning users.
+
+## Managing roles
+
+Once you are an `admin`, open **Manage → People** to search batch members and
+switch their role between Student, Class rep, and Admin. Role changes run
+through a secure database function, so only signed-in admins can make them —
+and the last remaining admin cannot demote themselves. Reps can publish and
+edit content but cannot change anyone's role.
 
 Data access lives in `src/hooks/use-batch-data.ts` (queries + mutations) and the
 session/profile state in `src/hooks/use-auth.tsx`.

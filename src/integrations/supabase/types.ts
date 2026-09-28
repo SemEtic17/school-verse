@@ -346,7 +346,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
-      [_ in never]: never;
+      set_profile_role: {
+        Args: { target_profile_id: string; new_role: string };
+        Returns: undefined;
+      };
     };
     Enums: {
       [_ in never]: never;

@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, Tables } from "@/integrations/supabase/types";
 import type {
   BatchEvent,
   Idea,
@@ -12,12 +12,16 @@ import type {
 } from "@/data/batch";
 import { useAuth } from "./use-auth";
 
+export type Role = "student" | "rep" | "admin";
+
 type EventRow = Database["public"]["Tables"]["events"]["Row"];
 type PollRow = Database["public"]["Tables"]["polls"]["Row"];
 type PollOptionRow = Database["public"]["Tables"]["poll_options"]["Row"];
 type SuggestionRow = Database["public"]["Tables"]["poll_suggestions"]["Row"];
 type IdeaRow = Database["public"]["Tables"]["ideas"]["Row"];
 type MemoryRow = Database["public"]["Tables"]["memories"]["Row"];
+
+type Profile = Tables<"profiles">;
 
 type IdeaWithAuthor = IdeaRow & { author: { full_name: string | null } | null };
 type SuggestionWithAuthor = Pick<
@@ -32,6 +36,7 @@ export const queryKeys = {
   polls: ["polls"] as const,
   ideas: ["ideas"] as const,
   memories: ["memories"] as const,
+  profiles: ["profiles"] as const,
   myVotes: (userId: string | null) => ["poll-votes", "mine", userId] as const,
   myUpvotes: (userId: string | null) =>
     ["idea-upvotes", "mine", userId] as const,
@@ -227,6 +232,22 @@ export function useMemories() {
   });
 }
 
+export function useProfiles() {
+  return useQuery({
+    queryKey: queryKeys.profiles,
+    queryFn: async (): Promise<Profile[]> => {
+      // profiles_select_public lets any visitor read profiles (needed for
+      // author names). The list is sorted client-side.
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 /** Polls that drive the "senior clothes" gallery. */
 export function useClothingPolls() {
   const query = usePolls();
@@ -302,6 +323,39 @@ export function useCreateIdea() {
     },
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.ideas }),
+  });
+}
+
+/**
+ * Change a batch member's role via the `set_profile_role` security-definer
+ * function — clients cannot update `profiles.role` directly.
+ */
+export function useSetUserRole() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      profileId,
+      role,
+    }: {
+      profileId: string;
+      role: Role;
+    }) => {
+      const { error } = await supabase.rpc("set_profile_role", {
+        target_profile_id: profileId,
+        new_role: role,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      // Roles gate publishing everywhere, so refresh profiles (permissions
+      // panel) and every content list in one go.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.profiles });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.events });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.polls });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.ideas });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.memories });
+    },
   });
 }
 

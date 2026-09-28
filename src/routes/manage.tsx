@@ -9,8 +9,12 @@ import {
   useEvents,
   useIdeas,
   useMemories,
+  useProfiles,
+  useSetUserRole,
+  type Role,
 } from "@/hooks/use-batch-data";
 import { supabase } from "@/integrations/supabase/client";
+import type { Profile } from "@/hooks/use-auth";
 import type { BatchEvent, Idea, Memory, Poll } from "@/data/batch";
 
 const title = "Manage batch content — SchoolVerse";
@@ -20,7 +24,7 @@ const inputClass =
 const imageTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxImageSize = 10 * 1024 * 1024;
 
-type Tab = "event" | "clothing" | "memory" | "idea";
+type Tab = "event" | "clothing" | "memory" | "idea" | "people";
 type Notice = { kind: "success" | "error"; text: string };
 type UploadedImage = { path: string; url: string };
 type Editing = { tab: Tab; id: string };
@@ -167,8 +171,12 @@ function ManagePage() {
   const clothing = useClothingPolls();
   const memories = useMemories();
   const ideas = useIdeas();
+  const people = useProfiles();
+  const setUserRole = useSetUserRole();
 
   const isAdmin = profile?.role === "admin" || profile?.role === "rep";
+  // Role management is for full admins only — reps manage content, not people.
+  const canManageRoles = profile?.role === "admin";
 
   function resetEventForm() {
     setEventForm({
@@ -604,6 +612,12 @@ function ManagePage() {
     }, "Idea deleted.");
   }
 
+  function changeRole(profileId: string, role: Role) {
+    void runAction(async () => {
+      await setUserRole.mutateAsync({ profileId, role });
+    }, "Role updated.");
+  }
+
   if (loading) {
     return (
       <Shell>
@@ -669,7 +683,7 @@ function ManagePage() {
       />
 
       <div
-        className="mt-6 grid grid-cols-4 gap-1 rounded-xl p-1 glass"
+        className="mt-6 grid grid-cols-5 gap-1 rounded-xl p-1 glass"
         role="tablist"
         aria-label="Content type"
       >
@@ -690,6 +704,12 @@ function ManagePage() {
         </TabButton>
         <TabButton active={tab === "idea"} onClick={() => switchTab("idea")}>
           Idea
+        </TabButton>
+        <TabButton
+          active={tab === "people"}
+          onClick={() => switchTab("people")}
+        >
+          People
         </TabButton>
       </div>
 
@@ -1139,6 +1159,23 @@ function ManagePage() {
             </ExistingList>
           </>
         ) : null}
+
+        {tab === "people" ? (
+          canManageRoles ? (
+            <PeoplePanel
+              profiles={people.data ?? []}
+              loading={people.isLoading}
+              currentProfileId={user.id}
+              pending={pending}
+              onChangeRole={changeRole}
+            />
+          ) : (
+            <p className="text-[12px] leading-relaxed text-muted-foreground">
+              Only full admins can change roles. Ask an admin to grant rep or
+              admin access.
+            </p>
+          )
+        ) : null}
       </div>
     </Shell>
   );
@@ -1163,6 +1200,115 @@ function TabButton({
     >
       {children}
     </button>
+  );
+}
+
+const roleLabels: Record<Role, string> = {
+  student: "Student",
+  rep: "Class rep",
+  admin: "Admin",
+};
+
+/** profiles.role is a free string in the DB; label known roles, pass others through. */
+function roleLabel(role: string) {
+  return roleLabels[role as Role] ?? role;
+}
+
+function PeoplePanel({
+  profiles,
+  loading,
+  currentProfileId,
+  pending,
+  onChangeRole,
+}: {
+  profiles: Profile[];
+  loading: boolean;
+  currentProfileId: string;
+  pending: boolean;
+  onChangeRole: (profileId: string, role: Role) => void;
+}) {
+  const [search, setSearch] = useState("");
+  const normalized = search.trim().toLowerCase();
+  const filtered = profiles.filter((row) =>
+    `${row.full_name ?? ""} ${row.email}`.toLowerCase().includes(normalized),
+  );
+
+  if (loading) {
+    return <p className="text-[12px] text-muted-foreground">Loading people…</p>;
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-[12px] leading-relaxed text-muted-foreground">
+        Class reps can publish and edit content. Admins can do that plus grant
+        roles here.
+      </p>
+      <input
+        className={inputClass}
+        value={search}
+        onChange={(event) => setSearch(event.target.value)}
+        placeholder="Search by name or email"
+        type="search"
+        aria-label="Search people"
+      />
+      {filtered.length === 0 ? (
+        <p className="text-[12px] text-muted-foreground">
+          {profiles.length === 0
+            ? "No profiles yet — people appear here after their first sign-in."
+            : "Nobody matches that search."}
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {filtered.map((row) => (
+            <li
+              key={row.id}
+              className="flex items-center gap-3 rounded-xl p-2.5 ring-1 ring-inset ring-border"
+            >
+              {row.avatar_url ? (
+                <img
+                  src={row.avatar_url}
+                  alt=""
+                  className="size-10 shrink-0 rounded-full object-cover"
+                />
+              ) : (
+                <span className="grid size-10 shrink-0 place-items-center rounded-full bg-well text-[12px] font-semibold">
+                  {(row.full_name ?? row.email).charAt(0).toUpperCase()}
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[12px] font-semibold">
+                  {row.full_name ?? row.email}
+                  {row.id === currentProfileId ? " (you)" : ""}
+                </p>
+                <p className="truncate text-[11px] text-muted-foreground">
+                  {row.email}
+                </p>
+              </div>
+              <select
+                className="w-[120px] shrink-0 rounded-lg bg-well px-2 py-1.5 text-[11px] outline-none ring-1 ring-inset ring-border focus:ring-accent/50"
+                value={row.role}
+                disabled={pending || row.id === currentProfileId}
+                onChange={(event) =>
+                  onChangeRole(row.id, event.target.value as Role)
+                }
+                aria-label={`Role for ${row.full_name ?? row.email}`}
+              >
+                {row.id === currentProfileId ? (
+                  <option value={row.role}>{roleLabel(row.role)} (you)</option>
+                ) : (
+                  Object.entries(roleLabels).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                      {value === "admin" ? " ·" : ""}
+                    </option>
+                  ))
+                )}
+              </select>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

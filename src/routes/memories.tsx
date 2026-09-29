@@ -1,4 +1,7 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
+import { Plus } from "lucide-react";
 import { PageTitle, Shell } from "@/components/batch/Shell";
 import { MemoryGrid } from "@/components/batch/MemoryGrid";
 import { batch, type Memory } from "@/data/batch";
@@ -24,9 +27,15 @@ export const Route = createFileRoute("/memories")({
 
 function MemoriesPage() {
   const { data, isLoading, error } = useMemories();
+  const [activeAlbum, setActiveAlbum] = useState("All");
   const memories = data ?? [];
+  const albums = [...new Set(memories.map((memory) => memory.event))].sort();
+  const visibleMemories =
+    activeAlbum === "All"
+      ? memories
+      : memories.filter((memory) => memory.event === activeAlbum);
 
-  const groups = memories.reduce<Record<string, Memory[]>>((acc, m) => {
+  const groups = visibleMemories.reduce<Record<string, Memory[]>>((acc, m) => {
     (acc[m.event] ??= []).push(m);
     return acc;
   }, {});
@@ -39,6 +48,32 @@ function MemoriesPage() {
         blurb="Everything the batch has captured so far, grouped by where it happened."
       />
 
+      <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
+        <div
+          className="flex gap-1.5 overflow-x-auto"
+          aria-label="Memory albums"
+        >
+          {["All", ...albums].map((album) => (
+            <button
+              key={album}
+              type="button"
+              onClick={() => setActiveAlbum(album)}
+              aria-pressed={activeAlbum === album}
+              className={`shrink-0 rounded-full px-3 py-1.5 text-[11px] transition-colors ${activeAlbum === album ? "bg-accent text-accent-foreground" : "text-muted-foreground glass hover:text-foreground"}`}
+            >
+              {album}
+            </button>
+          ))}
+        </div>
+        <Link
+          to="/manage"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-accent px-4 py-2.5 text-[12px] font-bold text-accent-foreground transition-transform hover:-translate-y-0.5"
+        >
+          <Plus size={15} aria-hidden="true" />
+          Add memory
+        </Link>
+      </div>
+
       {error ? (
         <p className="mt-6 text-[12px] text-muted-foreground">
           Couldn't load memories. Please refresh.
@@ -50,8 +85,15 @@ function MemoriesPage() {
           Loading memories…
         </p>
       ) : memories.length === 0 ? (
+        <div className="mt-5 rounded-2xl p-4 glass">
+          <p className="text-[12px] text-muted-foreground">
+            No memories uploaded yet. Class reps can add the first photo from
+            the publishing workspace.
+          </p>
+        </div>
+      ) : visibleMemories.length === 0 ? (
         <p className="mt-6 text-[12px] text-muted-foreground">
-          No memories uploaded yet.
+          Nothing in this album yet.
         </p>
       ) : (
         Object.entries(groups).map(([event, items]) => (

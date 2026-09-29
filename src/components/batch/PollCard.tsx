@@ -1,7 +1,12 @@
 import { useState, type FormEvent } from "react";
+import { Heart } from "lucide-react";
 
 import { totalVotes, type Poll } from "@/data/batch";
-import { useAddSuggestion, useCastVote } from "@/hooks/use-batch-data";
+import {
+  useAddSuggestion,
+  useCastVote,
+  useToggleSuggestionUpvote,
+} from "@/hooks/use-batch-data";
 import { useAuth } from "@/hooks/use-auth";
 
 export function PollCard({
@@ -14,9 +19,11 @@ export function PollCard({
   const { user, signInWithGoogle } = useAuth();
   const castVote = useCastVote();
   const addSuggestion = useAddSuggestion();
+  const toggleSuggestionUpvote = useToggleSuggestionUpvote();
 
   const [selected, setSelected] = useState(poll.options[0]?.id ?? "");
   const [suggestion, setSuggestion] = useState("");
+  const [voteFeedback, setVoteFeedback] = useState(false);
 
   const voted = poll.myOptionId;
   const total = totalVotes(poll);
@@ -33,6 +40,8 @@ export function PollCard({
     }
     if (!selected || closed) return;
     await castVote.mutateAsync({ pollId: poll.id, optionId: selected });
+    setVoteFeedback(true);
+    window.setTimeout(() => setVoteFeedback(false), 1400);
   }
 
   async function handleSuggest(event: FormEvent) {
@@ -137,9 +146,9 @@ export function PollCard({
         type="button"
         onClick={() => void handleVote()}
         disabled={castVote.isPending || closed || poll.options.length === 0}
-        className={`mt-4 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-[13px] font-bold transition-transform duration-150 active:scale-[0.98] disabled:opacity-70 ${
+        className={`mt-4 flex w-full items-center justify-between rounded-2xl px-4 py-3 text-[13px] font-bold transition-all duration-300 active:scale-[0.98] disabled:opacity-70 ${
           voted
-            ? "bg-secondary text-muted-foreground"
+            ? "bg-accent/15 text-accent ring-1 ring-inset ring-accent/30"
             : "bg-accent text-accent-foreground"
         }`}
       >
@@ -152,8 +161,18 @@ export function PollCard({
                 ? "Saving vote…"
                 : `Vote ${poll.options.find((o) => o.id === selected)?.label ?? ""}`}
         </span>
-        <span>{voted ? "✓" : "→"}</span>
+        <span className={voteFeedback ? "animate-pulse" : ""}>
+          {voted ? "✓" : "→"}
+        </span>
       </button>
+      {voteFeedback ? (
+        <p
+          role="status"
+          className="mt-2 animate-rise text-center text-[11px] font-medium text-accent"
+        >
+          Your vote is in.
+        </p>
+      ) : null}
 
       <div className="mt-2 text-center font-mono text-[10px] text-muted-foreground">
         {total} {total === 1 ? "vote" : "votes"}
@@ -169,9 +188,39 @@ export function PollCard({
               </p>
             ) : (
               poll.suggestions.map((s) => (
-                <div key={s.id} className="rounded-2xl p-3 text-[12px] glass">
-                  <span className="font-semibold text-accent">{s.author}</span>{" "}
-                  <span className="text-muted-foreground">{s.text}</span>
+                <div
+                  key={s.id}
+                  className="flex items-start justify-between gap-3 rounded-2xl p-3 text-[12px] glass"
+                >
+                  <p className="min-w-0 leading-relaxed">
+                    <span className="font-semibold text-accent">
+                      {s.author}
+                    </span>{" "}
+                    <span className="text-muted-foreground">{s.text}</span>
+                  </p>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!user) {
+                        await signInWithGoogle();
+                        return;
+                      }
+                      await toggleSuggestionUpvote.mutateAsync({
+                        suggestionId: s.id,
+                        upvoted: s.upvoted,
+                      });
+                    }}
+                    disabled={toggleSuggestionUpvote.isPending}
+                    aria-pressed={s.upvoted}
+                    className={`flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[10px] transition-transform active:scale-90 disabled:opacity-60 ${s.upvoted ? "bg-accent/15 text-accent" : "text-muted-foreground hover:text-accent"}`}
+                    title={s.upvoted ? "Remove reaction" : "Like suggestion"}
+                  >
+                    <Heart
+                      size={13}
+                      className={s.upvoted ? "fill-current" : ""}
+                    />
+                    {s.upvotes}
+                  </button>
                 </div>
               ))
             )}

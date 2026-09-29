@@ -9,6 +9,28 @@ import { useAuth } from "@/hooks/use-auth";
 const title = `Ideas — ${batch.shortName} Class of ${batch.year}`;
 const description =
   "Student ideas for events, clothes and memories. Post yours and back the ones you like.";
+const starterIdeas = [
+  {
+    title: "A Culture Day idea",
+    body: "What should we do together for Culture Day?",
+    category: "Events",
+  },
+  {
+    title: "A senior merch idea",
+    body: "What would make our class clothes feel like us?",
+    category: "Clothes",
+  },
+  {
+    title: "A moment to remember",
+    body: "What memory from this year should we make sure gets shared?",
+    category: "Memories",
+  },
+  {
+    title: "One last batch plan",
+    body: "Where should we go or what should we do after graduation?",
+    category: "Fun",
+  },
+];
 
 export const Route = createFileRoute("/ideas")({
   head: () => ({
@@ -142,9 +164,37 @@ function IdeasPage() {
       {isLoading ? (
         <p className="mt-4 text-[12px] text-muted-foreground">Loading ideas…</p>
       ) : filtered.length === 0 ? (
-        <p className="mt-4 text-[12px] text-muted-foreground">
-          Nothing here yet — post the first idea.
-        </p>
+        <div className="mt-4 rounded-2xl p-4 glass">
+          <div className="text-[13px] font-semibold">
+            {ideas.length === 0
+              ? "Start the conversation."
+              : `No ${category.toLowerCase()} ideas yet.`}
+          </div>
+          <p className="mt-1 text-[12px] text-muted-foreground">
+            Pick a prompt to get the first thought on the board. The batch can
+            build on it with votes.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {starterIdeas
+              .filter(
+                (starter) =>
+                  category === "All" || category === starter.category,
+              )
+              .map((starter) => (
+                <button
+                  key={starter.category}
+                  type="button"
+                  onClick={() => {
+                    setForm(starter);
+                    setOpen(true);
+                  }}
+                  className="rounded-full px-3 py-2 text-left text-[11px] text-accent ring-1 ring-inset ring-accent/30 transition-colors hover:bg-accent/10"
+                >
+                  {starter.title}
+                </button>
+              ))}
+          </div>
+        </div>
       ) : (
         <div className="mt-4 grid gap-2.5 lg:grid-cols-2">
           {filtered.map((idea) => (

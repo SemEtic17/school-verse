@@ -43,6 +43,10 @@ run `supabase/migrations/202609260001_content_management.sql` in the Supabase
 SQL Editor. It secures profile roles and configures the `schoolverse-media`
 image bucket for admin/rep uploads.
 
+Also apply `supabase/migrations/202609290001_engagement.sql` in the Supabase SQL
+Editor to enable event RSVPs and reactions on poll suggestions. Reps can publish
+the homepage quick poll under **Manage → Daily**.
+
 To grant the first class representative access, run this in the SQL Editor,
 replacing the email with their Google account:
 

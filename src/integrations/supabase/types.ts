@@ -52,6 +52,24 @@ export type Database = {
         };
         Relationships: [];
       };
+      event_rsvps: {
+        Row: {
+          created_at: string;
+          event_id: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          event_id: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          event_id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
+      };
       idea_upvotes: {
         Row: {
           created_at: string;
@@ -234,6 +252,24 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      poll_suggestion_upvotes: {
+        Row: {
+          created_at: string;
+          suggestion_id: string;
+          user_id: string;
+        };
+        Insert: {
+          created_at?: string;
+          suggestion_id: string;
+          user_id: string;
+        };
+        Update: {
+          created_at?: string;
+          suggestion_id?: string;
+          user_id?: string;
+        };
+        Relationships: [];
       };
       poll_votes: {
         Row: {

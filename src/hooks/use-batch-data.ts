@@ -37,6 +37,7 @@ export const queryKeys = {
   ideas: ["ideas"] as const,
   memories: ["memories"] as const,
   profiles: ["profiles"] as const,
+  eventRsvps: (eventId: string) => ["event-rsvps", eventId] as const,
   myVotes: (userId: string | null) => ["poll-votes", "mine", userId] as const,
   myUpvotes: (userId: string | null) =>
     ["idea-upvotes", "mine", userId] as const,
@@ -119,23 +120,35 @@ export function usePolls() {
   return useQuery({
     queryKey: [...queryKeys.polls, userId],
     queryFn: async (): Promise<Poll[]> => {
-      const [pollsRes, optionsRes, suggestionsRes] = await Promise.all([
-        supabase
-          .from("polls")
-          .select("*")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("poll_options")
-          .select("*")
-          .order("votes_count", { ascending: false }),
-        supabase
-          .from("poll_suggestions")
-          .select("id, poll_id, suggestion, author:profiles(full_name)")
-          .order("created_at", { ascending: true }),
-      ]);
+      const [pollsRes, optionsRes, suggestionsRes, suggestionVotesRes] =
+        await Promise.all([
+          supabase
+            .from("polls")
+            .select("*")
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("poll_options")
+            .select("*")
+            .order("votes_count", { ascending: false }),
+          supabase
+            .from("poll_suggestions")
+            .select(
+              "id, poll_id, suggestion, author:profiles!poll_suggestions_user_id_fkey(full_name)",
+            )
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("poll_suggestion_upvotes")
+            .select("suggestion_id, user_id"),
+        ]);
       if (pollsRes.error) throw pollsRes.error;
       if (optionsRes.error) throw optionsRes.error;
       if (suggestionsRes.error) throw suggestionsRes.error;
+      const suggestionVotesUnavailable =
+        suggestionVotesRes.error?.code === "42P01" ||
+        suggestionVotesRes.error?.code === "PGRST205";
+      if (suggestionVotesRes.error && !suggestionVotesUnavailable) {
+        throw suggestionVotesRes.error;
+      }
 
       const myVotes = new Map<string, string>();
       if (userId) {
@@ -156,12 +169,21 @@ export function usePolls() {
       }
 
       const suggestionsByPoll = new Map<string, PollSuggestion[]>();
+      const suggestionVotesById = new Map<string, Set<string>>();
+      for (const vote of suggestionVotesRes.data ?? []) {
+        const users = suggestionVotesById.get(vote.suggestion_id) ?? new Set();
+        users.add(vote.user_id);
+        suggestionVotesById.set(vote.suggestion_id, users);
+      }
       for (const row of (suggestionsRes.data ?? []) as SuggestionWithAuthor[]) {
         const list = suggestionsByPoll.get(row.poll_id) ?? [];
+        const voters = suggestionVotesById.get(row.id) ?? new Set<string>();
         list.push({
           id: row.id,
           author: row.author?.full_name ?? "Anonymous",
           text: row.suggestion,
+          upvotes: voters.size,
+          upvoted: userId ? voters.has(userId) : false,
         });
         suggestionsByPoll.set(row.poll_id, list);
       }
@@ -178,6 +200,115 @@ export function usePolls() {
         myOptionId: myVotes.get(poll.id),
       }));
     },
+  });
+}
+
+export type EventAttendee = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+};
+
+export function useEventRsvps(eventId: string) {
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
+  return useQuery({
+    queryKey: queryKeys.eventRsvps(eventId),
+    enabled: Boolean(eventId),
+    queryFn: async () => {
+      const { data: rsvps, error } = await supabase
+        .from("event_rsvps")
+        .select("user_id")
+        .eq("event_id", eventId);
+      if (error) throw error;
+
+      const userIds = (rsvps ?? []).map((rsvp) => rsvp.user_id);
+      const { data: profiles, error: profilesError } = userIds.length
+        ? await supabase
+            .from("profiles")
+            .select("id, full_name, avatar_url")
+            .in("id", userIds)
+        : { data: [], error: null };
+      if (profilesError) throw profilesError;
+
+      const profileById = new Map(
+        (profiles ?? []).map((profile) => [profile.id, profile]),
+      );
+      const attendees: EventAttendee[] = userIds.map((id) => {
+        const profile = profileById.get(id);
+        return {
+          id,
+          name: profile?.full_name ?? "Batch member",
+          avatarUrl: profile?.avatar_url ?? null,
+        };
+      });
+      return {
+        attendees,
+        count: attendees.length,
+        isAttending: userId ? userIds.includes(userId) : false,
+      };
+    },
+  });
+}
+
+export function useToggleEventRsvp(eventId: string) {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async (isAttending: boolean) => {
+      if (!user) throw new Error("Sign in to RSVP.");
+      if (isAttending) {
+        const { error } = await supabase
+          .from("event_rsvps")
+          .delete()
+          .eq("event_id", eventId)
+          .eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("event_rsvps")
+          .insert({ event_id: eventId, user_id: user.id });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.eventRsvps(eventId),
+      }),
+  });
+}
+
+export function useToggleSuggestionUpvote() {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  return useMutation({
+    mutationFn: async ({
+      suggestionId,
+      upvoted,
+    }: {
+      suggestionId: string;
+      upvoted: boolean;
+    }) => {
+      if (!user) throw new Error("Sign in to react to a suggestion.");
+      if (upvoted) {
+        const { error } = await supabase
+          .from("poll_suggestion_upvotes")
+          .delete()
+          .eq("suggestion_id", suggestionId)
+          .eq("user_id", user.id);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase
+          .from("poll_suggestion_upvotes")
+          .insert({ suggestion_id: suggestionId, user_id: user.id });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.polls }),
   });
 }
 

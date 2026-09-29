@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
+import { Trash2 } from "lucide-react";
 import { PageTitle, Shell } from "@/components/batch/Shell";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -9,6 +10,7 @@ import {
   useEvents,
   useIdeas,
   useMemories,
+  usePolls,
   useProfiles,
   useSetUserRole,
   type Role,
@@ -24,7 +26,7 @@ const inputClass =
 const imageTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxImageSize = 10 * 1024 * 1024;
 
-type Tab = "event" | "clothing" | "memory" | "idea" | "people";
+type Tab = "event" | "clothing" | "daily" | "memory" | "idea" | "people";
 type Notice = { kind: "success" | "error"; text: string };
 type UploadedImage = { path: string; url: string };
 type Editing = { tab: Tab; id: string };
@@ -148,6 +150,12 @@ function ManagePage() {
     question: "",
     closesAt: "",
   });
+  const [dailyForm, setDailyForm] = useState({
+    title: "",
+    question: "",
+    closesAt: "",
+  });
+  const [dailyOptions, setDailyOptions] = useState(["", ""]);
   const [options, setOptions] = useState<ClothingOptionDraft[]>([
     { label: "", image: null },
     { label: "", image: null },
@@ -169,6 +177,10 @@ function ManagePage() {
 
   const events = useEvents();
   const clothing = useClothingPolls();
+  const allPolls = usePolls();
+  const dailyPolls = (allPolls.data ?? []).filter(
+    (poll) => poll.category === "daily",
+  );
   const memories = useMemories();
   const ideas = useIdeas();
   const people = useProfiles();
@@ -487,6 +499,62 @@ function ManagePage() {
     }
   }
 
+  async function saveDailyPoll(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!user || pending) return;
+    const answers = dailyOptions.map((answer) => answer.trim()).filter(Boolean);
+    if (answers.length < 2) {
+      setNotice({ kind: "error", text: "Add at least two answer choices." });
+      return;
+    }
+
+    setPending(true);
+    setNotice(null);
+    let pollId: string | null = null;
+    try {
+      const { data: poll, error: pollError } = await supabase
+        .from("polls")
+        .insert({
+          title: dailyForm.title.trim(),
+          question: dailyForm.question.trim(),
+          category: "daily",
+          closes_at: dailyForm.closesAt
+            ? new Date(dailyForm.closesAt).toISOString()
+            : null,
+        })
+        .select("id")
+        .single();
+      if (pollError) throw pollError;
+      pollId = poll.id;
+
+      const { error: optionsError } = await supabase
+        .from("poll_options")
+        .insert(
+          answers.map((option) => ({ poll_id: poll.id, option_text: option })),
+        );
+      if (optionsError) throw optionsError;
+
+      await queryClient.invalidateQueries({ queryKey: queryKeys.polls });
+      setDailyForm({ title: "", question: "", closesAt: "" });
+      setDailyOptions(["", ""]);
+      setNotice({ kind: "success", text: "Daily question published." });
+    } catch (error) {
+      if (pollId) await supabase.from("polls").delete().eq("id", pollId);
+      setNotice({ kind: "error", text: errorText(error) });
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function deleteDailyPoll(poll: Poll) {
+    setConfirmId(null);
+    void runAction(async () => {
+      const { error } = await supabase.from("polls").delete().eq("id", poll.id);
+      if (error) throw error;
+      await queryClient.invalidateQueries({ queryKey: queryKeys.polls });
+    }, "Daily question deleted.");
+  }
+
   async function saveMemory(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!user || pending) return;
@@ -683,7 +751,7 @@ function ManagePage() {
       />
 
       <div
-        className="mt-6 grid grid-cols-5 gap-1 rounded-xl p-1 glass"
+        className="mt-6 grid grid-cols-6 gap-1 rounded-xl p-1 glass"
         role="tablist"
         aria-label="Content type"
       >
@@ -695,6 +763,9 @@ function ManagePage() {
           onClick={() => switchTab("clothing")}
         >
           Clothing
+        </TabButton>
+        <TabButton active={tab === "daily"} onClick={() => switchTab("daily")}>
+          Daily
         </TabButton>
         <TabButton
           active={tab === "memory"}
@@ -983,6 +1054,155 @@ function ManagePage() {
                   onConfirmDelete={() => deleteClothing(poll)}
                   onCancel={() => setConfirmId(null)}
                 />
+              ))}
+            </ExistingList>
+          </>
+        ) : null}
+
+        {tab === "daily" ? (
+          <>
+            <form
+              className="space-y-3"
+              onSubmit={(event) => void saveDailyPoll(event)}
+            >
+              <FormField label="Question label">
+                <input
+                  className={inputClass}
+                  value={dailyForm.title}
+                  onChange={(event) =>
+                    setDailyForm({ ...dailyForm, title: event.target.value })
+                  }
+                  required
+                  maxLength={100}
+                  placeholder="Quick question"
+                />
+              </FormField>
+              <FormField label="Daily question">
+                <input
+                  className={inputClass}
+                  value={dailyForm.question}
+                  onChange={(event) =>
+                    setDailyForm({ ...dailyForm, question: event.target.value })
+                  }
+                  required
+                  maxLength={240}
+                  placeholder="Which song should play at graduation?"
+                />
+              </FormField>
+              <FormField label="Closes (optional)">
+                <input
+                  className={inputClass}
+                  type="datetime-local"
+                  value={dailyForm.closesAt}
+                  onChange={(event) =>
+                    setDailyForm({ ...dailyForm, closesAt: event.target.value })
+                  }
+                />
+              </FormField>
+              <div className="space-y-2">
+                {dailyOptions.map((option, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <label className="flex-1 text-[11px] text-muted-foreground">
+                      <span className="sr-only">Answer {index + 1}</span>
+                      <input
+                        className={inputClass}
+                        value={option}
+                        onChange={(event) =>
+                          setDailyOptions(
+                            dailyOptions.map((answer, answerIndex) =>
+                              answerIndex === index
+                                ? event.target.value
+                                : answer,
+                            ),
+                          )
+                        }
+                        required={index < 2}
+                        maxLength={80}
+                        placeholder={`Answer ${index + 1}`}
+                      />
+                    </label>
+                    {dailyOptions.length > 2 ? (
+                      <button
+                        type="button"
+                        aria-label={`Remove answer ${index + 1}`}
+                        onClick={() =>
+                          setDailyOptions(
+                            dailyOptions.filter(
+                              (_, answerIndex) => answerIndex !== index,
+                            ),
+                          )
+                        }
+                        className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    ) : null}
+                  </div>
+                ))}
+                {dailyOptions.length < 6 ? (
+                  <button
+                    type="button"
+                    onClick={() => setDailyOptions([...dailyOptions, ""])}
+                    className="w-full rounded-xl px-3 py-2 text-[12px] text-accent ring-1 ring-inset ring-border"
+                  >
+                    Add answer
+                  </button>
+                ) : null}
+              </div>
+              <PublishButton
+                pending={pending}
+                label="Publish daily question"
+                pendingLabel="Publishing…"
+              />
+            </form>
+
+            <SectionHeading>Existing daily questions</SectionHeading>
+            <ExistingList
+              loading={allPolls.isLoading}
+              empty={dailyPolls.length === 0}
+            >
+              {dailyPolls.map((poll) => (
+                <div
+                  key={poll.id}
+                  className="flex items-center justify-between gap-3 border-b border-border py-3 last:border-0"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-[12px] font-medium">
+                      {poll.question}
+                    </div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {poll.options.length} answers
+                      {poll.closesIn ? ` · ${poll.closesIn}` : ""}
+                    </div>
+                  </div>
+                  {confirmId === poll.id ? (
+                    <div className="flex shrink-0 gap-2 text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => deleteDailyPoll(poll)}
+                        className="font-semibold text-destructive"
+                      >
+                        Delete
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmId(null)}
+                        className="text-muted-foreground"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setConfirmId(poll.id)}
+                      aria-label={`Delete ${poll.title}`}
+                      className="grid size-9 shrink-0 place-items-center rounded-full text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  )}
+                </div>
               ))}
             </ExistingList>
           </>

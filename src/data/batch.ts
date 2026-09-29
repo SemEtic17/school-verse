@@ -65,7 +65,13 @@ export type PollOption = {
   image?: string | undefined;
 };
 
-export type PollSuggestion = { id: string; author: string; text: string };
+export type PollSuggestion = {
+  id: string;
+  author: string;
+  text: string;
+  upvotes: number;
+  upvoted: boolean;
+};
 
 export type Poll = {
   id: string;

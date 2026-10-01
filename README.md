@@ -80,8 +80,16 @@ be served as a static site:
 
 - **Build command:** `npm install && npm run build`
 - **Publish directory:** `.output/public`
-- **SPA routing:** handled by `public/_redirects`, which ships with the build
-  and rewrites every unknown path to `/index.html`.
+- **SPA routing (required):** Render ignores `public/_redirects` (that is a
+  Netlify/Cloudflare Pages convention). In the Render dashboard, under your
+  static site → **Redirects/Rewrites**, add a rule:
+  - **Source:** `/*`
+  - **Destination:** `/index.html`
+  - **Action:** `Rewrite`
+
+  Without it, deep links like `/decisions` return 404 when opened directly or
+  refreshed, even though in-app navigation works. The `_redirects` file is kept
+  so the build also works out of the box on hosts that honor it.
 - **Environment:** set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the
   Render dashboard (they are baked in at build time, so rebuild after changes).
 

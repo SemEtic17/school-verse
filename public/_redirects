@@ -1,4 +1,4 @@
-# Render Static Site — Single Page Application fallback.
-# Every path that is not a real file is served the SPA shell so the
-# client-side TanStack Router can resolve it.
+# Netlify / Cloudflare Pages-style SPA fallback. NOTE: Render static sites
+# IGNORE this file — configure the same rule in the Render dashboard instead
+# (Redirects/Rewrites: /* -> /index.html, action Rewrite).
 /*    /index.html   200

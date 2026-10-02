@@ -70,6 +70,80 @@ export type Database = {
         };
         Relationships: [];
       };
+      chat_gifs: {
+        Row: {
+          created_at: string;
+          id: string;
+          name: string;
+          storage_path: string;
+          uploaded_by: string;
+          url: string;
+        };
+        Insert: {
+          created_at?: string;
+          id?: string;
+          name: string;
+          storage_path: string;
+          uploaded_by: string;
+          url: string;
+        };
+        Update: {
+          created_at?: string;
+          id?: string;
+          name?: string;
+          storage_path?: string;
+          uploaded_by?: string;
+          url?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_gifs_uploaded_by_fkey";
+            columns: ["uploaded_by"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      chat_messages: {
+        Row: {
+          body: string;
+          created_at: string;
+          gif_id: string | null;
+          id: string;
+          sender_id: string;
+        };
+        Insert: {
+          body?: string;
+          created_at?: string;
+          gif_id?: string | null;
+          id?: string;
+          sender_id: string;
+        };
+        Update: {
+          body?: string;
+          created_at?: string;
+          gif_id?: string | null;
+          id?: string;
+          sender_id?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "chat_messages_gif_id_fkey";
+            columns: ["gif_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_gifs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chat_messages_sender_id_fkey";
+            columns: ["sender_id"];
+            isOneToOne: false;
+            referencedRelation: "profiles";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       idea_upvotes: {
         Row: {
           created_at: string;

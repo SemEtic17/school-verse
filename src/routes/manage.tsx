@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { PageTitle, Shell } from "@/components/batch/Shell";
+import { GifManager } from "@/components/batch/GifManager";
 import { useAuth } from "@/hooks/use-auth";
 import {
   queryKeys,
@@ -26,7 +27,8 @@ const inputClass =
 const imageTypes = ["image/jpeg", "image/png", "image/webp"];
 const maxImageSize = 10 * 1024 * 1024;
 
-type Tab = "event" | "clothing" | "daily" | "memory" | "idea" | "people";
+type Tab =
+  "event" | "clothing" | "daily" | "memory" | "idea" | "people" | "gifs";
 type Notice = { kind: "success" | "error"; text: string };
 type UploadedImage = { path: string; url: string };
 type Editing = { tab: Tab; id: string };
@@ -751,7 +753,7 @@ function ManagePage() {
       />
 
       <div
-        className="mt-6 grid grid-cols-6 gap-1 rounded-xl p-1 glass"
+        className="mt-6 grid grid-cols-7 gap-1 rounded-xl p-1 glass"
         role="tablist"
         aria-label="Content type"
       >
@@ -781,6 +783,9 @@ function ManagePage() {
           onClick={() => switchTab("people")}
         >
           People
+        </TabButton>
+        <TabButton active={tab === "gifs"} onClick={() => switchTab("gifs")}>
+          GIFs
         </TabButton>
       </div>
 
@@ -1396,6 +1401,8 @@ function ManagePage() {
             </p>
           )
         ) : null}
+
+        {tab === "gifs" ? <GifManager /> : null}
       </div>
     </Shell>
   );

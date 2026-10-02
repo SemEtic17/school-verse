@@ -62,6 +62,20 @@ memories, moderate ideas, and (for full admins) manage people. Google sign-in
 creates a profile on first sign-in; the same button works for both new and
 returning users.
 
+## Batch chat
+
+A batch-wide group chat lives at **/chat** with live updates (Supabase
+Realtime). To enable it, apply `supabase/migrations/202610020001_chat.sql` in
+the Supabase SQL Editor. It creates the `chat_messages` and `chat_gifs` tables
+with row-level security, the public `chat-gifs` storage bucket, and adds
+`chat_messages` to the `supabase_realtime` publication.
+
+Custom memes: generate animated face GIFs with any free face-swap/GIF tool
+separately, then upload them under **Manage → GIFs** (class reps and admins
+only, 10 MB max, GIF/MP4/WebM). Everyone can send them from the chat's GIF
+picker — short MP4/WebM clips loop inline like GIFs. Keep memes of real people
+consensual and kind; reps can remove anything from the library.
+
 ## Managing roles
 
 Once you are an `admin`, open **Manage → People** to search batch members and
@@ -90,6 +104,7 @@ be served as a static site:
   Without it, deep links like `/decisions` return 404 when opened directly or
   refreshed, even though in-app navigation works. The `_redirects` file is kept
   so the build also works out of the box on hosts that honor it.
+
 - **Environment:** set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the
   Render dashboard (they are baked in at build time, so rebuild after changes).
 

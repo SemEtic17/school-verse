@@ -22,6 +22,8 @@ export type AuthState = {
   loading: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  /** Re-fetch the signed-in member's profile row after an update. */
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -52,6 +54,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const loadProfile = useCallback(async (id: string) => {
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", id)
+      .maybeSingle();
+    if (error) {
+      console.error("Failed to load profile", error);
+      return;
+    }
+    setProfile(data);
+  }, []);
+
   // Load the matching profile row whenever the signed-in user changes.
   const userId = session?.user.id ?? null;
   useEffect(() => {
@@ -61,24 +76,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let active = true;
-    void supabase
-      .from("profiles")
-      .select("*")
-      .eq("id", userId)
-      .maybeSingle()
-      .then(({ data, error }) => {
-        if (!active) return;
-        if (error) {
-          console.error("Failed to load profile", error);
-          return;
-        }
-        setProfile(data);
-      });
+    void (async () => {
+      if (!active) return;
+      await loadProfile(userId);
+    })();
 
     return () => {
       active = false;
     };
-  }, [userId]);
+  }, [userId, loadProfile]);
+
+  const refreshProfile = useCallback(async () => {
+    if (!userId) return;
+    await loadProfile(userId);
+  }, [userId, loadProfile]);
 
   const signInWithGoogle = useCallback(async () => {
     const { error } = await supabase.auth.signInWithOAuth({
@@ -104,8 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       signInWithGoogle,
       signOut,
+      refreshProfile,
     }),
-    [session, profile, loading, signInWithGoogle, signOut],
+    [session, profile, loading, signInWithGoogle, signOut, refreshProfile],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

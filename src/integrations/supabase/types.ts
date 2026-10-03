@@ -456,6 +456,10 @@ export type Database = {
       [_ in never]: never;
     };
     Functions: {
+      set_profile_avatar: {
+        Args: { new_avatar_url: string };
+        Returns: string;
+      };
       set_profile_role: {
         Args: { target_profile_id: string; new_role: string };
         Returns: undefined;

@@ -1,6 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { LogOut } from "lucide-react";
+import { LogOut, UserRound } from "lucide-react";
 import { batch } from "@/data/batch";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -169,6 +169,12 @@ function AccountButton() {
       <DropdownMenuContent align="end" className="w-56">
         <DropdownMenuLabel className="truncate">{label}</DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link to="/profile">
+            <UserRound aria-hidden="true" />
+            Your profile
+          </Link>
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={() => void signOut()}>
           <LogOut aria-hidden="true" />
           Sign out

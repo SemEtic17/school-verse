@@ -457,6 +457,100 @@ export function useCreateIdea() {
   });
 }
 
+const avatarBucket = "avatars";
+const avatarTypes = ["image/jpeg", "image/png", "image/webp"];
+const maxAvatarSize = 5 * 1024 * 1024;
+
+/** Storage object path for a public bucket URL, so replaced avatars can be cleaned up. */
+function avatarStoragePath(url: string | null | undefined) {
+  if (!url) return null;
+  const marker = `/object/public/${avatarBucket}/`;
+  const index = url.indexOf(marker);
+  if (index === -1) return null;
+  return decodeURIComponent(url.slice(index + marker.length));
+}
+
+/**
+ * Replace the signed-in member's profile picture.
+ *
+ * Uploads to the owner-scoped `avatars` bucket, then commits the URL through
+ * the `set_profile_avatar` RPC (the only column a member may change on their
+ * own row). The previous file is removed afterwards, and a failed commit rolls
+ * back the orphaned upload so the bucket stays clean.
+ */
+export function useUpdateAvatar() {
+  const { user, refreshProfile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (file: File): Promise<string> => {
+      if (!user) throw new Error("Sign in to update your profile.");
+      if (!avatarTypes.includes(file.type)) {
+        throw new Error("Choose a JPEG, PNG, or WebP image.");
+      }
+      if (file.size > maxAvatarSize) {
+        throw new Error("Profile pictures must be 5 MB or smaller.");
+      }
+
+      const extension =
+        file.type === "image/png"
+          ? "png"
+          : file.type === "image/webp"
+            ? "webp"
+            : "jpg";
+      const path = `${user.id}/${crypto.randomUUID()}.${extension}`;
+      const { error: uploadError } = await supabase.storage
+        .from(avatarBucket)
+        .upload(path, file, {
+          cacheControl: "3600",
+          contentType: file.type,
+          upsert: false,
+        });
+      if (uploadError) throw uploadError;
+
+      const url = supabase.storage.from(avatarBucket).getPublicUrl(path)
+        .data.publicUrl;
+      const { data: previousUrl, error } = await supabase.rpc(
+        "set_profile_avatar",
+        { new_avatar_url: url },
+      );
+      if (error) {
+        await supabase.storage.from(avatarBucket).remove([path]);
+        throw error;
+      }
+
+      const previousPath = avatarStoragePath(previousUrl);
+      if (previousPath && previousPath !== path) {
+        await supabase.storage.from(avatarBucket).remove([previousPath]);
+      }
+
+      await refreshProfile();
+      return url;
+    },
+  });
+}
+
+/** Clear the signed-in member's profile picture and delete the stored file. */
+export function useRemoveAvatar() {
+  const { user, refreshProfile } = useAuth();
+
+  return useMutation({
+    mutationFn: async (): Promise<void> => {
+      if (!user) throw new Error("Sign in to update your profile.");
+      const { data: previousUrl, error } = await supabase.rpc(
+        "set_profile_avatar",
+        { new_avatar_url: "" },
+      );
+      if (error) throw error;
+
+      const previousPath = avatarStoragePath(previousUrl);
+      if (previousPath) {
+        await supabase.storage.from(avatarBucket).remove([previousPath]);
+      }
+      await refreshProfile();
+    },
+  });
+}
+
 /**
  * Change a batch member's role via the `set_profile_role` security-definer
  * function — clients cannot update `profiles.role` directly.

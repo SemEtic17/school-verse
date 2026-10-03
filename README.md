@@ -76,6 +76,15 @@ only, 10 MB max, GIF/MP4/WebM). Everyone can send them from the chat's GIF
 picker — short MP4/WebM clips loop inline like GIFs. Keep memes of real people
 consensual and kind; reps can remove anything from the library.
 
+## Member profiles
+
+Members open their profile from the avatar menu in the top bar (**Your
+profile**, `/profile`) to update their profile picture. Photos are uploaded to
+the public `avatars` storage bucket and committed through the
+`set_profile_avatar` database function, so each member can only change their own
+avatar. To enable it, apply `supabase/migrations/202610030001_profiles.sql` in
+the Supabase SQL Editor.
+
 ## Managing roles
 
 Once you are an `admin`, open **Manage → People** to search batch members and

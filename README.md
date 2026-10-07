@@ -70,6 +70,11 @@ the Supabase SQL Editor. It creates the `chat_messages` and `chat_gifs` tables
 with row-level security, the public `chat-gifs` storage bucket, and adds
 `chat_messages` to the `supabase_realtime` publication.
 
+Replies: apply `supabase/migrations/202610070001_chat_replies.sql` in the same
+SQL Editor. It adds `reply_to_id` to `chat_messages`, so anyone can quote a
+message and jump back to it from the reply, and quotes are cleared
+automatically when the original message is deleted.
+
 Custom memes: generate animated face GIFs with any free face-swap/GIF tool
 separately, then upload them under **Manage → GIFs** (class reps and admins
 only, 10 MB max, GIF/MP4/WebM). Everyone can send them from the chat's GIF

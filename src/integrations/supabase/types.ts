@@ -111,6 +111,7 @@ export type Database = {
           created_at: string;
           gif_id: string | null;
           id: string;
+          reply_to_id: string | null;
           sender_id: string;
         };
         Insert: {
@@ -118,6 +119,7 @@ export type Database = {
           created_at?: string;
           gif_id?: string | null;
           id?: string;
+          reply_to_id?: string | null;
           sender_id: string;
         };
         Update: {
@@ -125,6 +127,7 @@ export type Database = {
           created_at?: string;
           gif_id?: string | null;
           id?: string;
+          reply_to_id?: string | null;
           sender_id?: string;
         };
         Relationships: [
@@ -133,6 +136,13 @@ export type Database = {
             columns: ["gif_id"];
             isOneToOne: false;
             referencedRelation: "chat_gifs";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "chat_messages_reply_to_id_fkey";
+            columns: ["reply_to_id"];
+            isOneToOne: false;
+            referencedRelation: "chat_messages";
             referencedColumns: ["id"];
           },
           {

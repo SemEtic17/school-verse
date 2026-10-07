@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ImagePlay, Send, Trash2 } from "lucide-react";
+import { ImagePlay, Reply, Send, Trash2, X } from "lucide-react";
 import { PageTitle, Shell } from "@/components/batch/Shell";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -62,11 +62,14 @@ function ChatPage() {
   const deleteMessage = useDeleteMessage();
 
   const [body, setBody] = useState("");
+  const [replyTo, setReplyTo] = useState<ChatMessage | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const stickToBottom = useRef(true);
   const initialised = useRef(false);
 
@@ -102,13 +105,41 @@ function ChatPage() {
         senderId: user.id,
         body: text,
         gifId: gif?.id ?? null,
+        replyToId: replyTo?.id ?? null,
       });
       setBody("");
+      setReplyTo(null);
       setPickerOpen(false);
       stickToBottom.current = true;
     } catch (error) {
       setNotice(errorText(error));
     }
+  }
+
+  function startReply(message: ChatMessage) {
+    setReplyTo(message);
+    inputRef.current?.focus();
+  }
+
+  /** Scroll the quoted message into view and flash it, without moving the page. */
+  function jumpToMessage(messageId: string) {
+    const container = scrollRef.current;
+    const target = container?.querySelector<HTMLElement>(
+      `[data-message-id="${messageId}"]`,
+    );
+    if (!container || !target) return;
+    const top =
+      target.getBoundingClientRect().top -
+      container.getBoundingClientRect().top +
+      container.scrollTop -
+      12;
+    container.scrollTo({ top, behavior: "smooth" });
+    setHighlightId(messageId);
+    window.setTimeout(
+      () =>
+        setHighlightId((current) => (current === messageId ? null : current)),
+      1600,
+    );
   }
 
   async function remove(message: ChatMessage) {
@@ -160,7 +191,7 @@ function ChatPage() {
       <PageTitle
         eyebrow="Batch hangout"
         title="The group chat."
-        blurb="Talk with the batch and drop your custom memes — tap the GIF button to send one."
+        blurb="Talk with the batch, reply to any message, and drop your custom memes — tap the GIF button to send one."
       />
 
       <div className="mt-5 flex flex-col rounded-3xl p-3 glass">
@@ -195,7 +226,13 @@ function ChatPage() {
                 new Date(message.createdAt),
               );
             return (
-              <div key={message.id}>
+              <div
+                key={message.id}
+                data-message-id={message.id}
+                className={`rounded-2xl transition-shadow duration-500 ${
+                  highlightId === message.id ? "ring-2 ring-accent/70" : ""
+                }`}
+              >
                 {newDay ? (
                   <div className="my-3 flex items-center gap-3">
                     <span className="h-px flex-1 bg-border" />
@@ -208,7 +245,9 @@ function ChatPage() {
                 <MessageRow
                   message={message}
                   own={message.senderId === user.id}
+                  onReply={() => startReply(message)}
                   onDelete={() => void remove(message)}
+                  onJumpToReply={jumpToMessage}
                 />
               </div>
             );
@@ -220,6 +259,28 @@ function ChatPage() {
           <p className="mt-3 rounded-xl bg-destructive/10 px-3 py-2 text-[12px] text-destructive">
             {notice}
           </p>
+        ) : null}
+
+        {replyTo ? (
+          <div className="mt-3 flex items-center gap-2 rounded-2xl bg-well px-3 py-2 ring-1 ring-inset ring-border">
+            <Reply size={14} className="shrink-0 text-accent" />
+            <div className="min-w-0 flex-1">
+              <div className="text-[10px] font-semibold text-accent">
+                Replying to {replyTo.senderName ?? "a batch member"}
+              </div>
+              <div className="truncate text-[11px] text-muted-foreground">
+                {replyTo.body || (replyTo.gif ? "GIF" : "Message")}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setReplyTo(null)}
+              aria-label="Cancel reply"
+              className="shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+            >
+              <X size={14} />
+            </button>
+          </div>
         ) : null}
 
         {pickerOpen ? (
@@ -239,11 +300,15 @@ function ChatPage() {
           }}
         >
           <input
+            ref={inputRef}
             value={body}
             onChange={(event) => setBody(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape" && replyTo) setReplyTo(null);
+            }}
             maxLength={1000}
-            placeholder="Message the batch…"
-            aria-label="Message"
+            placeholder={replyTo ? "Write a reply…" : "Message the batch…"}
+            aria-label={replyTo ? "Reply" : "Message"}
             className="min-w-0 flex-1 rounded-xl bg-well px-3 py-2.5 text-[13px] outline-none ring-1 ring-inset ring-border placeholder:text-muted-foreground focus:ring-accent/50"
           />
           <button
@@ -276,13 +341,18 @@ function ChatPage() {
 function MessageRow({
   message,
   own,
+  onReply,
   onDelete,
+  onJumpToReply,
 }: {
   message: ChatMessage;
   own: boolean;
+  onReply: () => void;
   onDelete: () => void;
+  onJumpToReply: (messageId: string) => void;
 }) {
   const name = message.senderName ?? "Batch member";
+  const reply = message.replyTo;
 
   return (
     <div className={`group flex items-end gap-2 ${own ? "justify-end" : ""}`}>
@@ -301,14 +371,25 @@ function MessageRow({
       ) : null}
 
       {own ? (
-        <button
-          type="button"
-          onClick={onDelete}
-          aria-label="Delete message"
-          className="mb-1 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
-        >
-          <Trash2 size={13} />
-        </button>
+        <div className="mb-1 flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={onReply}
+            aria-label="Reply to this message"
+            title="Reply"
+            className="text-muted-foreground/60 transition-colors hover:text-accent"
+          >
+            <Reply size={13} />
+          </button>
+          <button
+            type="button"
+            onClick={onDelete}
+            aria-label="Delete message"
+            className="text-muted-foreground/60 opacity-0 transition-opacity hover:text-destructive focus-visible:opacity-100 group-hover:opacity-100"
+          >
+            <Trash2 size={13} />
+          </button>
+        </div>
       ) : null}
 
       <div className={`max-w-[78%] ${own ? "text-right" : ""}`}>
@@ -324,6 +405,29 @@ function MessageRow({
               : "rounded-bl-md bg-well ring-1 ring-inset ring-border"
           }`}
         >
+          {reply ? (
+            <button
+              type="button"
+              onClick={() => onJumpToReply(reply.id)}
+              title="Jump to the quoted message"
+              className={`mb-2 inline-block max-w-[220px] rounded-lg border-l-2 px-2 py-1 align-top text-left text-[11px] ${
+                own
+                  ? "border-accent-foreground/60 bg-accent-foreground/15"
+                  : "border-accent/70 bg-secondary"
+              }`}
+            >
+              <span className="block truncate font-semibold">
+                {reply.senderName ?? "Batch member"}
+              </span>
+              <span
+                className={`block truncate ${
+                  own ? "text-accent-foreground/80" : "text-muted-foreground"
+                }`}
+              >
+                {reply.body || (reply.gifUrl ? "GIF" : "Message")}
+              </span>
+            </button>
+          ) : null}
           {message.gif ? (
             <span className="block overflow-hidden rounded-xl">
               {isVideoUrl(message.gif.url) ? (
@@ -352,6 +456,18 @@ function MessageRow({
           ) : null}
         </div>
       </div>
+
+      {!own ? (
+        <button
+          type="button"
+          onClick={onReply}
+          aria-label={`Reply to ${name}`}
+          title="Reply"
+          className="mb-1 shrink-0 text-muted-foreground/60 transition-colors hover:text-accent"
+        >
+          <Reply size={13} />
+        </button>
+      ) : null}
     </div>
   );
 }

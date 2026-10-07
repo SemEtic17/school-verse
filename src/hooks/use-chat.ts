@@ -10,6 +10,14 @@ export type ChatGif = {
   storagePath: string;
 };
 
+/** The message a reply quotes, trimmed down to what the chat bubble shows. */
+export type ChatReply = {
+  id: string;
+  body: string;
+  senderName: string | null;
+  gifUrl: string | null;
+};
+
 export type ChatMessage = {
   id: string;
   body: string;
@@ -18,6 +26,7 @@ export type ChatMessage = {
   senderName: string | null;
   senderAvatar: string | null;
   gif: ChatGif | null;
+  replyTo: ChatReply | null;
 };
 
 export const chatKeys = {
@@ -43,6 +52,33 @@ const messageSelect = `
   gif:chat_gifs (id, url, name)
 `;
 
+/**
+ * Quoting a message reads the parent row back through the `reply_to_id` foreign
+ * key. That column ships in supabase/migrations/202610070001_chat_replies.sql;
+ * until it is applied we quietly fall back to plain messages (see fetchRows).
+ */
+const messageSelectWithReply = `
+  id,
+  body,
+  created_at,
+  sender_id,
+  sender:profiles (full_name, avatar_url),
+  gif:chat_gifs (id, url, name),
+  reply_to:chat_messages!reply_to_id (
+    id,
+    body,
+    sender:profiles (full_name),
+    gif:chat_gifs (url)
+  )
+`;
+
+type ReplyRow = {
+  id: string;
+  body: string;
+  sender: { full_name: string | null } | null;
+  gif: { url: string } | null;
+};
+
 type MessageRow = {
   id: string;
   body: string;
@@ -50,6 +86,8 @@ type MessageRow = {
   sender_id: string;
   sender: { full_name: string | null; avatar_url: string | null } | null;
   gif: { id: string; url: string; name: string } | null;
+  // Absent from the fallback select used before the replies migration lands.
+  reply_to?: ReplyRow | null;
 };
 
 type GifRow = {
@@ -75,7 +113,65 @@ function toMessage(row: MessageRow): ChatMessage {
           storagePath: "",
         }
       : null,
+    replyTo: row.reply_to
+      ? {
+          id: row.reply_to.id,
+          body: row.reply_to.body,
+          senderName: row.reply_to.sender?.full_name ?? null,
+          gifUrl: row.reply_to.gif?.url ?? null,
+        }
+      : null,
   };
+}
+
+/** Postgres code for "column does not exist". */
+function isMissingReplyColumn(error: { code?: string } | null) {
+  return error?.code === "42703";
+}
+
+/**
+ * Whether the database has the `reply_to_id` column, cached for the session.
+ *
+ * Selecting the column on its own is the reliable probe: asking for the reply
+ * join before the migration is applied fails with a relationship error
+ * (PGRST200) rather than a column error, which is harder to tell apart from a
+ * genuine mistake.
+ */
+let replySupport: boolean | null = null;
+
+async function hasReplySupport() {
+  if (replySupport !== null) return replySupport;
+  const { error } = await supabase
+    .from("chat_messages")
+    .select("reply_to_id")
+    .limit(1);
+  replySupport = !isMissingReplyColumn(error);
+  return replySupport;
+}
+
+async function selectRows(select: string, messageId: string | null) {
+  const base = supabase.from("chat_messages").select(select);
+  const { data, error } = messageId
+    ? await base.eq("id", messageId).maybeSingle()
+    : await base.order("created_at", { ascending: false }).limit(200);
+  return {
+    rows: (data ?? null) as unknown as MessageRow[] | MessageRow | null,
+    error,
+  };
+}
+
+/**
+ * Load messages with their quoted parent, falling back to plain messages on a
+ * database that has not run the replies migration yet.
+ */
+async function fetchRows(messageId: string | null) {
+  const select = (await hasReplySupport())
+    ? messageSelectWithReply
+    : messageSelect;
+  const { rows, error } = await selectRows(select, messageId);
+  if (error) throw error;
+  if (!rows) return [];
+  return Array.isArray(rows) ? rows : [rows];
 }
 
 function toGif(row: GifRow): ChatGif {
@@ -92,14 +188,10 @@ async function appendMessage(
   queryClient: ReturnType<typeof useQueryClient>,
   messageId: string,
 ) {
-  const { data, error } = await supabase
-    .from("chat_messages")
-    .select(messageSelect)
-    .eq("id", messageId)
-    .maybeSingle();
-  if (error || !data) return;
+  const rows = await fetchRows(messageId).catch(() => []);
+  if (!rows[0]) return;
 
-  const message = toMessage(data as unknown as MessageRow);
+  const message = toMessage(rows[0]);
   queryClient.setQueryData<ChatMessage[]>(chatKeys.messages, (current) => {
     const list = current ?? [];
     if (list.some((item) => item.id === message.id)) return list;
@@ -114,13 +206,8 @@ export function useChatMessages() {
     queryKey: chatKeys.messages,
     queryFn: async (): Promise<ChatMessage[]> => {
       // Newest 200 messages, oldest-first for rendering.
-      const { data, error } = await supabase
-        .from("chat_messages")
-        .select(messageSelect)
-        .order("created_at", { ascending: false })
-        .limit(200);
-      if (error) throw error;
-      return (data as unknown as MessageRow[]).reverse().map(toMessage);
+      const rows = await fetchRows(null);
+      return rows.reverse().map(toMessage);
     },
   });
 
@@ -166,13 +253,22 @@ export function useSendMessage() {
       senderId: string;
       body: string;
       gifId: string | null;
+      replyToId: string | null;
     }) => {
+      if (input.replyToId && !(await hasReplySupport())) {
+        throw new Error(
+          "Replies aren't switched on yet — apply the chat replies migration in Supabase (see README → Batch chat).",
+        );
+      }
       const { data, error } = await supabase
         .from("chat_messages")
         .insert({
           sender_id: input.senderId,
           body: input.body,
           gif_id: input.gifId,
+          // Left out entirely when not replying, so plain messages still send
+          // against a database without the replies migration.
+          ...(input.replyToId ? { reply_to_id: input.replyToId } : {}),
         })
         .select("id")
         .single();
@@ -200,7 +296,15 @@ export function useDeleteMessage() {
     },
     onSuccess: (messageId) => {
       queryClient.setQueryData<ChatMessage[]>(chatKeys.messages, (current) =>
-        (current ?? []).filter((message) => message.id !== messageId),
+        (current ?? [])
+          .filter((message) => message.id !== messageId)
+          // The database clears quotes of a deleted message (on delete set
+          // null), so drop that preview here too.
+          .map((message) =>
+            message.replyTo?.id === messageId
+              ? { ...message, replyTo: null }
+              : message,
+          ),
       );
     },
   });

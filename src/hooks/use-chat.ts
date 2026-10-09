@@ -48,31 +48,32 @@ const messageSelect = `
   body,
   created_at,
   sender_id,
+  reply_to_id,
   sender:profiles (full_name, avatar_url),
   gif:chat_gifs (id, url, name)
 `;
 
 /**
- * Quoting a message reads the parent row back through the `reply_to_id` foreign
- * key. That column ships in supabase/migrations/202610070001_chat_replies.sql;
- * until it is applied we quietly fall back to plain messages (see fetchRows).
+ * Used before the replies migration lands, when `reply_to_id` doesn't exist yet.
  */
-const messageSelectWithReply = `
+const messageSelectWithoutReplies = `
   id,
   body,
   created_at,
   sender_id,
   sender:profiles (full_name, avatar_url),
-  gif:chat_gifs (id, url, name),
-  reply_to:chat_messages!reply_to_id (
-    id,
-    body,
-    sender:profiles (full_name),
-    gif:chat_gifs (url)
-  )
+  gif:chat_gifs (id, url, name)
 `;
 
-type ReplyRow = {
+/**
+ * Quoted messages are fetched in a second, plain query and joined by id on the
+ * client. PostgREST can't safely embed the self-referencing `chat_messages` row
+ * here: a self join exposes both a to-one and a to-many relationship for the
+ * same foreign key, and naming the table as the embed target resolves to the
+ * wrong (to-many) side. That returned an array for every message, so replies
+ * rendered as blank "Batch member / Message" quotes on every bubble.
+ */
+type ReplyTargetRow = {
   id: string;
   body: string;
   sender: { full_name: string | null } | null;
@@ -87,7 +88,7 @@ type MessageRow = {
   sender: { full_name: string | null; avatar_url: string | null } | null;
   gif: { id: string; url: string; name: string } | null;
   // Absent from the fallback select used before the replies migration lands.
-  reply_to?: ReplyRow | null;
+  reply_to_id?: string | null;
 };
 
 type GifRow = {
@@ -97,7 +98,10 @@ type GifRow = {
   storage_path: string;
 };
 
-function toMessage(row: MessageRow): ChatMessage {
+function toMessage(
+  row: MessageRow,
+  replies: Map<string, ChatReply> = new Map(),
+): ChatMessage {
   return {
     id: row.id,
     body: row.body,
@@ -113,15 +117,39 @@ function toMessage(row: MessageRow): ChatMessage {
           storagePath: "",
         }
       : null,
-    replyTo: row.reply_to
-      ? {
-          id: row.reply_to.id,
-          body: row.reply_to.body,
-          senderName: row.reply_to.sender?.full_name ?? null,
-          gifUrl: row.reply_to.gif?.url ?? null,
-        }
-      : null,
+    replyTo: row.reply_to_id ? (replies.get(row.reply_to_id) ?? null) : null,
   };
+}
+
+/** Fetch the quoted parents for a batch of messages and index them by id. */
+async function fetchReplies(
+  rows: MessageRow[],
+): Promise<Map<string, ChatReply>> {
+  const ids = [
+    ...new Set(
+      rows
+        .map((row) => row.reply_to_id)
+        .filter((id): id is string => typeof id === "string"),
+    ),
+  ];
+  const replies = new Map<string, ChatReply>();
+  if (ids.length === 0) return replies;
+
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("id, body, sender:profiles (full_name), gif:chat_gifs (url)")
+    .in("id", ids);
+  if (error) throw error;
+
+  for (const row of (data ?? []) as unknown as ReplyTargetRow[]) {
+    replies.set(row.id, {
+      id: row.id,
+      body: row.body,
+      senderName: row.sender?.full_name ?? null,
+      gifUrl: row.gif?.url ?? null,
+    });
+  }
+  return replies;
 }
 
 /** Postgres code for "column does not exist". */
@@ -155,23 +183,26 @@ async function selectRows(select: string, messageId: string | null) {
     ? await base.eq("id", messageId).maybeSingle()
     : await base.order("created_at", { ascending: false }).limit(200);
   return {
-    rows: (data ?? null) as unknown as MessageRow[] | MessageRow | null,
+    data: (data ?? null) as unknown as MessageRow[] | MessageRow | null,
     error,
   };
 }
 
 /**
- * Load messages with their quoted parent, falling back to plain messages on a
- * database that has not run the replies migration yet.
+ * Load messages plus the quoted parents for whichever messages are replies,
+ * falling back to plain messages on a database that has not run the replies
+ * migration yet.
  */
 async function fetchRows(messageId: string | null) {
   const select = (await hasReplySupport())
-    ? messageSelectWithReply
-    : messageSelect;
-  const { rows, error } = await selectRows(select, messageId);
+    ? messageSelect
+    : messageSelectWithoutReplies;
+  const { data, error } = await selectRows(select, messageId);
   if (error) throw error;
-  if (!rows) return [];
-  return Array.isArray(rows) ? rows : [rows];
+  if (!data)
+    return { rows: [] as MessageRow[], replies: new Map<string, ChatReply>() };
+  const rows = Array.isArray(data) ? data : [data];
+  return { rows, replies: await fetchReplies(rows) };
 }
 
 function toGif(row: GifRow): ChatGif {
@@ -188,10 +219,13 @@ async function appendMessage(
   queryClient: ReturnType<typeof useQueryClient>,
   messageId: string,
 ) {
-  const rows = await fetchRows(messageId).catch(() => []);
+  const { rows, replies } = await fetchRows(messageId).catch(() => ({
+    rows: [] as MessageRow[],
+    replies: new Map<string, ChatReply>(),
+  }));
   if (!rows[0]) return;
 
-  const message = toMessage(rows[0]);
+  const message = toMessage(rows[0], replies);
   queryClient.setQueryData<ChatMessage[]>(chatKeys.messages, (current) => {
     const list = current ?? [];
     if (list.some((item) => item.id === message.id)) return list;
@@ -206,8 +240,8 @@ export function useChatMessages() {
     queryKey: chatKeys.messages,
     queryFn: async (): Promise<ChatMessage[]> => {
       // Newest 200 messages, oldest-first for rendering.
-      const rows = await fetchRows(null);
-      return rows.reverse().map(toMessage);
+      const { rows, replies } = await fetchRows(null);
+      return rows.reverse().map((row) => toMessage(row, replies));
     },
   });
 
